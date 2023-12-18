@@ -4,22 +4,53 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const SBR_CDP = `wss://brd-customer-hl_4056ab80-zone-scraping_browser:stcb78n178qk@brd.superproxy.io:9222`;
+function sleep(time) {
+    return new Promise(function (resolve) {
+        setTimeout(resolve, time);
+    });
+}
 
+// take a screenshot for the page
 const takeScreenshot = async(page) =>{
     await page.screenshot({path:'page.png',fullPage:true})
 }
 
 async function main(){
     console.log("connecting to Scraping Browser.....");
-    const browser = await PW.chromium.connectOverCDP(SBR_CDP);
+    const browser = await PW.chromium.launch({
+        headless: false,
+    });
     console.log("connected! Navigating");
     const page = await browser.newPage();
-
     try{
-        await page.goto('https://www.united.com/en/us',{ timeout:2 * 60 * 100 });
-        console.log("Navigated! Scraping page content......");
-        await takeScreenshot(page)
+        // goto: to go to the website you want to scrape
+        await page.goto('https://www.emlakjet.com/ilan/century-21-project-ten-kocaeli-basiskele-yuvacik-ta-triplex-villa-14366401');
+        // Wait for the element to be rendered on the page
+        
+        await page.waitForSelector('._2TxNQv',);
+        await page.waitForSelector('._3r_drE',);
+
+        // it give yu some time to take all the data form page (function)
+        await sleep(10*1000)
+
+        // the price 
+        const price = await page.$eval('._2TxNQv', (element) => {
+            return element.textContent.trim();
+        });
+        console.log('Price:', price);
+        // The space
+        const Room = await page.$$eval('._3r_drE', (elements) => {
+            return elements[0] ? elements[0].textContent.trim() : 'N/A';
+        });
+        console.log('The Rooms:', Room);
+        // The space
+        const space = await page.$$eval('._3r_drE', (elements) => {
+            return elements[1] ? elements[1].textContent.trim() : 'N/A';
+        });
+        console.log('The Space:', space);
+
+        await takeScreenshot(page) 
+
     }catch(err){
         throw err;
     }finally{
