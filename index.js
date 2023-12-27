@@ -3,7 +3,7 @@ import retry from 'async-retry';
 import pkg from 'pg';
 const { Client } = pkg;
 
-async function insertDataIntoDatabase(price, room, floor) {
+async function insertDataIntoDatabase(url,price, room, floor) {
     const client = new Client({
         user: 'postgres',
         host: '192.168.2.129', 
@@ -13,8 +13,17 @@ async function insertDataIntoDatabase(price, room, floor) {
     });
     try {
         await client.connect();
-        const query = 'INSERT INTO public."Real2" (price, floor, space) VALUES ($1, $2, $3)';
-        const values = [price, room, floor];
+        // check if the url already exists in the database
+        const checkQuery = 'SELECT COUNT(*) FROM public."Real2" WHERE url = $1';
+        const checkValues = [url];
+        const result = await client.query(checkQuery, checkValues);
+        if (result.rows[0].count > 0) {
+            console.log('URL already exists in the database. Skipping insertion.');
+            return;
+        }
+        // if i don't have the url in the database it will run this code 
+        const query = 'INSERT INTO public."Real2" (url,price, floor, space) VALUES ($1, $2, $3,$4)';
+        const values = [url,price, room, floor];
         await client.query(query, values);
         console.log('Data inserted into PostgreSQL');
     } catch (err) {
@@ -23,7 +32,6 @@ async function insertDataIntoDatabase(price, room, floor) {
         await client.end();
     }
 }
-
 
 const takeScreenshot = async(page) =>{
     await page.screenshot({path:'./img/page.png',fullPage:true})
@@ -69,7 +77,7 @@ async function main(){
             });
             console.log("it is build");
         
-            await insertDataIntoDatabase(price, room, floor);
+            await insertDataIntoDatabase(URL,price, room, floor);
             
         }
         await takeScreenshot(page) 
