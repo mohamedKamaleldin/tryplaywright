@@ -1,5 +1,29 @@
 import PW from 'playwright';
 import retry from 'async-retry';
+import pkg from 'pg';
+const { Client } = pkg;
+
+async function insertDataIntoDatabase(price, room, floor) {
+    const client = new Client({
+        user: 'postgres',
+        host: '192.168.2.129', 
+        password: 'mkee',
+        port: 5432, 
+        database: 'DB1',
+    });
+    try {
+        await client.connect();
+        const query = 'INSERT INTO public."Real2" (price, floor, space) VALUES ($1, $2, $3)';
+        const values = [price, room, floor];
+        await client.query(query, values);
+        console.log('Data inserted into PostgreSQL');
+    } catch (err) {
+        console.error('Error inserting data into PostgreSQL:', err);
+    } finally {
+        await client.end();
+    }
+}
+
 
 const takeScreenshot = async(page) =>{
     await page.screenshot({path:'./img/page.png',fullPage:true})
@@ -13,33 +37,42 @@ async function main(){
     console.log("connected! Navigating");
     const page = await browser.newPage();
     try{
-        await page.goto('https://www.emlakjet.com/satilik-konut/istanbul/');  
+        await page.goto('https://www.emlakjet.com', { waitUntil: 'load', timeout: 90000 });
+        await page.waitForSelector('input.fTNyyb');
+        await page.type('input.fTNyyb', 'istanbul');
+        await page.click('button[data-ej-label="button_ara"]');
+        await page.waitForNavigation({ waitUntil: 'domcontentloaded' });
+
         const urls = await page.$$eval('._3qUI9q > a', (elements) =>
             elements.map((el) => el.href)
         );
         let k=1;
         for(let i=0;i<urls.length;i++){
             console.log("=".repeat(15) + `the ${k++}st `);
+            await page.goto(urls[i], { waitUntil: 'domcontentloaded' }); 
             await page.waitForSelector('._3r_drE', { timeout: 60000, visible: true });
             await page.waitForSelector('._2TxNQv', { timeout: 60000, visible: true });
             await page.goto(urls[i])
-            const price = await page.$eval('._2TxNQv', (element) => {
+            const URL=await urls[i];
+            console.log(URL)
+            const priceString  = await page.$eval('._2TxNQv', (element) => {
                 return element.textContent.trim();
             });
-            console.log('Price:', price);
-            const Room = await page.$$eval('._3r_drE', (elements) => {
+            const price = parseInt(priceString.replace(/[^\d]/g, ''), 10);
+            console.log(`Price:, ${price} TL`);
+            const room = await page.$$eval('._3r_drE', (elements) => {
                 return elements[0] ? elements[0].textContent.trim() : 'N/A';
             });
-            console.log('The Rooms:', Room);
-            const space = await page.$$eval('._3r_drE', (elements) => {
+            console.log('The Room:', room);
+            const floor = await page.$$eval('._3r_drE', (elements) => {
                 return elements[1] ? elements[1].textContent.trim() : 'N/A';
             });
-            console.log('The floor:', space);
-        }
+            console.log("it is build");
         
-
+            await insertDataIntoDatabase(price, room, floor);
+            
+        }
         await takeScreenshot(page) 
-
     }catch(err){
         throw err;
     }finally{
@@ -47,8 +80,11 @@ async function main(){
     }
 }
 
+
 await retry(main,{
     retries: 3,
+    minTimeout: 1000, 
+    maxTimeout: 30000,
     onRetry:(err) =>{
         console.error('retrying ...',err);
     }
